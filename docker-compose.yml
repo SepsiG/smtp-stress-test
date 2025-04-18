@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  smtp-stress-test:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+      - ./scenarios:/app/scenarios
+    restart: unless-stopped

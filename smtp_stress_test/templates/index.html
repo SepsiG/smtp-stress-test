@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMTP Stress Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <style>
+        body { 
+            padding: 20px; 
+            font-family: Arial, sans-serif;
+        }
+        .scenario-card { 
+            margin-bottom: 20px; 
+        }
+        .card {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card-body {
+            padding: 1.5rem;
+        }
+        .btn-group {
+            margin-top: 10px;
+        }
+        #scenarioModal .form-group {
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">SMTP Stress Test Tool</h1>
+        
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title mb-3">Actions</h5>
+                <div class="btn-toolbar justify-content-center" role="toolbar">
+                    <div class="btn-group me-2 mb-2">
+                        <button class="btn btn-success" onclick="showScenarioModal()">
+                            Create New Scenario
+                        </button>
+                        <button class="btn btn-primary" onclick="showUploadModal()">
+                            Upload Scenario
+                        </button>
+                    </div>
+                    <div class="btn-group mb-2">
+                        <button class="btn btn-info me-2" onclick="showTimeoutModal()">
+                            Timeout Settings
+                        </button>
+                        <button class="btn btn-warning me-2" id="toggleRefreshBtn" onclick="toggleAutoRefresh()">
+                            Disable Auto Refresh
+                        </button>
+                        <button class="btn btn-danger me-2" id="stopAllTestsBtn" onclick="stopAllTests()" style="display: none;">
+                            Stop All Tests
+                        </button>
+                        <button class="btn btn-secondary" onclick="showAboutModal()">
+                            About
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Available Scenarios</h2>
+            <button class="btn btn-danger" onclick="deleteAllScenarios()">
+                Delete All Scenarios
+            </button>
+        </div>
+        <div class="row" id="scenarios-list">
+            <!-- Scenarios will be loaded here -->
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+            <h2>Test Reports</h2>
+            <button class="btn btn-danger" onclick="deleteAllReports()">
+                Delete All Reports
+            </button>
+        </div>
+        <div class="row" id="reports-list">
+            <!-- Reports will be loaded here -->
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+            <h2>Log Files</h2>
+            <button class="btn btn-danger" onclick="deleteAllLogs()">
+                Delete All Logs
+            </button>
+        </div>
+        <div class="row" id="logs-list">
+            <!-- Logs will be loaded here -->
+        </div>
+    </div>
+
+    <!-- Scenario Modal -->
+    <div class="modal fade" id="scenarioModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="scenarioModalTitle">New Scenario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="scenarioForm">
+                        <input type="hidden" id="scenarioMode" value="create">
+                        <input type="hidden" id="originalName" value="">
+                        
+                        <div class="form-group">
+                            <label for="name">Name</label>
+                            <input type="text" class="form-control" id="name" required pattern="[a-zA-Z0-9_-]+" oninput="validateScenarioName(this)">
+                            <small class="form-text text-muted">Only letters, numbers, hyphens and underscores are allowed. Spaces and special characters are not permitted.</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="description">Description</label>
+                            <textarea class="form-control" id="description" required></textarea>
+                        </div>
+                        
+                        <h5 class="mt-4">SMTP Settings</h5>
+                        <div class="form-group">
+                            <label for="smtp_host">SMTP Host</label>
+                            <input type="text" class="form-control" id="smtp_host" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="smtp_port">SMTP Port</label>
+                            <input type="number" class="form-control" id="smtp_port" required>
+                        </div>
+                        
+                        <div class="form-check mb-2">
+                            <input type="checkbox" class="form-check-input" id="smtp_tls" checked>
+                            <label class="form-check-label" for="smtp_tls">Use TLS</label>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="smtp_verify_cert" checked>
+                            <label class="form-check-label" for="smtp_verify_cert">Verify TLS/SSL Certificate</label>
+                            <small class="form-text text-muted d-block">Uncheck this option to accept self-signed certificates</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="smtp_username">SMTP Username</label>
+                            <input type="text" class="form-control" id="smtp_username">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="smtp_password">SMTP Password</label>
+                            <input type="password" class="form-control" id="smtp_password">
+                        </div>
+                        
+                        <h5 class="mt-4">Email Template</h5>
+                        <div class="form-group">
+                            <label for="email_subject">Subject</label>
+                            <input type="text" class="form-control" id="email_subject" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="email_body">Message</label>
+                            <textarea class="form-control" id="email_body" rows="3" required></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="from_email">From Email</label>
+                            <input type="email" class="form-control" id="from_email" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="to_email">To Email(s)</label>
+                            <div class="mb-2">
+                                <textarea class="form-control" id="to_email" rows="3" placeholder="Emails separated by commas or new lines" required></textarea>
+                            </div>
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="recipient_list" accept=".txt,.csv">
+                                <button class="btn btn-outline-secondary" type="button" onclick="loadRecipientList()">
+                                    Upload List
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">
+                                You can upload a TXT or CSV file (one email address per line)
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="cc_email">CC Email(s) (comma separated)</label>
+                            <input type="text" class="form-control" id="cc_email">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="bcc_email">BCC Email(s) (comma separated)</label>
+                            <input type="text" class="form-control" id="bcc_email">
+                        </div>
+
+                        <div class="form-group mt-3">
+                            <label>Attachments</label>
+                            <div id="attachmentList" class="mb-2">
+                                <!-- Existing attachments will be listed here -->
+                            </div>
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="attachment">
+                                <button class="btn btn-outline-secondary" type="button" onclick="addAttachment()">Add</button>
+                            </div>
+                            <input type="hidden" id="attachments" value="">
+                        </div>
+                        
+                        <h5 class="mt-4">Test Settings</h5>
+                        <div class="form-group">
+                            <label for="num_threads">Number of Threads</label>
+                            <input type="number" class="form-control" id="num_threads" required min="1">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="emails_per_thread">Emails per Thread</label>
+                            <input type="number" class="form-control" id="emails_per_thread" required min="1">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="delay_between_emails">Delay between Emails (seconds)</label>
+                            <input type="number" class="form-control" id="delay_between_emails" step="0.1" min="0" value="0">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="saveScenario()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upload Scenario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="scenarioFile" class="form-label">Scenario JSON File</label>
+                            <input type="file" class="form-control" id="scenarioFile" accept=".json">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="uploadScenario()">Upload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Log View Modal -->
+    <div class="modal fade" id="logViewModal" tabindex="-1">
+        <div class="modal-dialog modal-xl" style="max-width: 90%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="logViewModalTitle">View Log</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre id="logContent" style="max-height: 70vh; overflow-y: auto; white-space: pre-wrap;"></pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-danger" id="deleteCurrentLogBtn">Delete Log</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Timeout Settings Modal -->
+    <div class="modal fade" id="timeoutModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Timeout Settings</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="timeoutForm">
+                        <div class="mb-3">
+                            <label for="smtpConnectTimeout" class="form-label">SMTP Connection Timeout (seconds)</label>
+                            <input type="number" class="form-control" id="smtpConnectTimeout" min="0.1" max="30" step="0.1" value="1.0">
+                            <small class="form-text text-muted">Lower value = faster error detection. Recommended: 0.5-2 seconds.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="smtpSendTimeout" class="form-label">SMTP Send Timeout (seconds)</label>
+                            <input type="number" class="form-control" id="smtpSendTimeout" min="0.1" max="30" step="0.1" value="1.0">
+                            <small class="form-text text-muted">How long the system should wait for an email to be sent. Recommended: 1-3 seconds.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="statusRefreshInterval" class="form-label">Status Refresh Interval (milliseconds)</label>
+                            <input type="number" class="form-control" id="statusRefreshInterval" min="100" max="5000" step="100" value="500">
+                            <small class="form-text text-muted">How frequently the test status should refresh. Recommended: 300-1000 ms.</small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveTimeoutSettings()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let scenarioModal;
+        let uploadModal;
+        let timeoutModal;
+        let attachmentFiles = new Map(); // Store File objects by filename
+        
+        // Alapértelmezett timeout beállítások
+        let timeoutSettings = {
+            smtpConnectTimeout: 1.0,  // másodperc
+            smtpSendTimeout: 1.0,     // másodperc
+            statusRefreshInterval: 500 // milliszekundum
+        };
+        
+        // Auto refresh timers
+        let logsRefreshTimer = null;
+        let reportsRefreshTimer = null;
+        let autoRefreshEnabled = true;        // Enabled by default
+        let refreshInterval = 5000;           // 5 seconds by default
+        
+        // Status checker időzítők (scenarioName -> timeout ID)
+        let statusCheckers = {};
+        
+        // Név mező validáció
+        function validateScenarioName(input) {
+            // Csak betűk, számok, kötőjel és aláhúzás karakterek
+            const regex = /^[a-zA-Z0-9_-]+$/;
+            // Eltávolítjuk a nem megfelelő karaktereket
+            const sanitizedValue = input.value.replace(/[^a-zA-Z0-9_-]/g, '');
+            
+            if (input.value !== sanitizedValue) {
+                input.value = sanitizedValue;
+            }
+            
+            // Vizuális jelzés a megfelelő formátumról
+            if (regex.test(input.value)) {
+                input.classList.remove('is-invalid');
+                input.classList.add('is-valid');
+            } else {
+                input.classList.remove('is-valid');
+                if (input.value) {
+                    input.classList.add('is-invalid');
+                } else {
+                    input.classList.remove('is-invalid');
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            scenarioModal = new bootstrap.Modal(document.getElementById('scenarioModal'));
+            uploadModal = new bootstrap.Modal(document.getElementById('uploadModal'));
+            timeoutModal = new bootstrap.Modal(document.getElementById('timeoutModal'));
+            aboutModal = new bootstrap.Modal(document.getElementById('aboutModal'));
+            
+            // Timeout beállítások betöltése a localStorage-ból, ha létezik
+            loadTimeoutSettings();
+            
+            // Kezdeti betöltés
+            loadScenarios();
+            loadReports();
+            loadLogs();
+            
+            // Start automatic refresh
+            startAutoRefresh();
+        });
+
+        function addAttachment() {
+            const input = document.getElementById('attachment');
+            if (!input.files || !input.files[0]) return;
+
+            const file = input.files[0];
+            attachmentFiles.set(file.name, file);
+            updateAttachmentList();
+            input.value = ''; // Reset input
+        }
+
+        function removeAttachment(filename) {
+            attachmentFiles.delete(filename);
+            updateAttachmentList();
+        }
+
+        function updateAttachmentList() {
+            const list = document.getElementById('attachmentList');
+            list.innerHTML = '';
+            
+            attachmentFiles.forEach((file, filename) => {
+                const div = document.createElement('div');
+                div.className = 'mb-1 d-flex align-items-center';
+                div.innerHTML = `
+                    <span class="me-2">${filename}</span>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="removeAttachment('${filename}')">
+                        Delete
+                    </button>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function clearAttachments() {
+            attachmentFiles.clear();
+            updateAttachmentList();
+        }
+
+        // Update showScenarioModal to clear attachments
+        function showScenarioModal(scenarioName = null) {
+            const form = document.getElementById('scenarioForm');
+            form.reset();
+            clearAttachments();
+            
+            if (scenarioName) {
+                document.getElementById('scenarioModalTitle').textContent = 'Edit Scenario';
+                document.getElementById('scenarioMode').value = 'edit';
+                document.getElementById('originalName').value = scenarioName;
+                loadScenarioData(scenarioName);
+            } else {
+                document.getElementById('scenarioModalTitle').textContent = 'New Scenario';
+                document.getElementById('scenarioMode').value = 'create';
+                document.getElementById('originalName').value = '';
+            }
+            
+            scenarioModal.show();
+        }
+
+        async function loadScenarioData(scenarioName) {
+            try {
+                const response = await fetch(`/scenarios/${scenarioName}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                // Adatok ellenőrzése
+                if (!data || !data.smtp_config || !data.email_template) {
+                    throw new Error('Hibás scenario formátum');
+                }
+                
+                document.getElementById('name').value = data.name;
+                document.getElementById('description').value = data.description;
+                
+                // SMTP config
+                document.getElementById('smtp_host').value = data.smtp_config.host;
+                document.getElementById('smtp_port').value = data.smtp_config.port;
+                document.getElementById('smtp_tls').checked = data.smtp_config.use_tls;
+                document.getElementById('smtp_verify_cert').checked = data.smtp_config.verify_cert !== false; // Default to true if not defined
+                document.getElementById('smtp_username').value = data.smtp_config.username || '';
+                document.getElementById('smtp_password').value = data.smtp_config.password || '';
+                
+                // Email template
+                document.getElementById('email_subject').value = data.email_template.subject;
+                document.getElementById('email_body').value = data.email_template.body;
+                document.getElementById('from_email').value = data.email_template.from_email;
+                document.getElementById('to_email').value = data.email_template.to_email.join(', ');
+                document.getElementById('cc_email').value = (data.email_template.cc_email || []).join(', ');
+                document.getElementById('bcc_email').value = (data.email_template.bcc_email || []).join(', ');
+
+                // Load existing attachments if any
+                clearAttachments();
+                if (data.email_template.attachments && data.email_template.attachments.length > 0) {
+                    // For existing attachments, we'll just show the filenames since we can't load the actual files
+                    data.email_template.attachments.forEach(attachment => {
+                        const filename = attachment.split('/').pop(); // Get just the filename
+                        // Create a placeholder File object
+                        const file = new File([""], filename, { type: "application/octet-stream" });
+                        attachmentFiles.set(filename, file);
+                    });
+                    updateAttachmentList();
+                }
+                
+                // Test settings
+                document.getElementById('num_threads').value = data.num_threads;
+                document.getElementById('emails_per_thread').value = data.emails_per_thread;
+                document.getElementById('delay_between_emails').value = data.delay_between_emails;
+                
+            } catch (error) {
+                console.error('Error loading scenario:', error);
+                let errorMessage = 'Error occurred while loading the scenario: ';
+                
+                if (error.message.includes('HTTP error')) {
+                    if (error.message.includes('404')) {
+                        errorMessage += 'The scenario could not be found';
+                    } else {
+                        errorMessage += 'A server error occurred';
+                    }
+                } else if (error.message === 'Hibás scenario formátum') {
+                    errorMessage += 'The scenario format is invalid';
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                alert(errorMessage);
+                scenarioModal.hide(); // Bezárjuk a modalt hiba esetén
+                return;
+            }
+        }
+
+        async function saveScenario() {
+            const mode = document.getElementById('scenarioMode').value;
+            const originalName = document.getElementById('originalName').value;
+
+            // First upload any attachments
+            const attachmentPaths = [];
+            if (attachmentFiles.size > 0) {
+                const formData = new FormData();
+                attachmentFiles.forEach((file) => {
+                    formData.append('files', file);
+                });
+                
+                try {
+                    const uploadResponse = await fetch('/scenarios/upload-attachments', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    if (!uploadResponse.ok) {
+                        throw new Error('Failed to upload attachments');
+                    }
+                    const uploadResult = await uploadResponse.json();
+                    attachmentPaths.push(...uploadResult.paths);
+                } catch (error) {
+                    console.error('Error uploading attachments:', error);
+                    alert('Error occurred while uploading attachments');
+                    return;
+                }
+            }
+            
+            const scenarioData = {
+                name: document.getElementById('name').value,
+                description: document.getElementById('description').value,
+                smtp_config: {
+                    host: document.getElementById('smtp_host').value,
+                    port: parseInt(document.getElementById('smtp_port').value),
+                    use_tls: document.getElementById('smtp_tls').checked,
+                    verify_cert: document.getElementById('smtp_verify_cert').checked,
+                    username: document.getElementById('smtp_username').value || null,
+                    password: document.getElementById('smtp_password').value || null
+                },
+                email_template: {
+                    subject: document.getElementById('email_subject').value,
+                    body: document.getElementById('email_body').value,
+                    from_email: document.getElementById('from_email').value,
+                    to_email: document.getElementById('to_email').value.split(',').map(e => e.trim()),
+                    cc_email: document.getElementById('cc_email').value ? document.getElementById('cc_email').value.split(',').map(e => e.trim()) : [],
+                    bcc_email: document.getElementById('bcc_email').value ? document.getElementById('bcc_email').value.split(',').map(e => e.trim()) : [],
+                    attachments: attachmentPaths
+                },
+                num_threads: parseInt(document.getElementById('num_threads').value),
+                emails_per_thread: parseInt(document.getElementById('emails_per_thread').value),
+                delay_between_emails: parseFloat(document.getElementById('delay_between_emails').value)
+            };
+            
+            try {
+                let response;
+                if (mode === 'edit') {
+                    response = await fetch(`/scenarios/${originalName}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(scenarioData)
+                    });
+                } else {
+                    response = await fetch('/scenarios/create', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(scenarioData)
+                    });
+                }
+                
+                const data = await response.json();
+                if (response.ok) {
+                    alert(data.message);
+                    scenarioModal.hide();
+                    loadScenarios();
+                } else {
+                    alert(data.detail || 'Error occurred during saving');
+                }
+            } catch (error) {
+                console.error('Error saving scenario:', error);
+                alert('Error occurred during saving');
+            }
+        }
+
+        async function deleteAllScenarios() {
+            if (!confirm('Are you sure you want to delete all scenarios? This action cannot be undone!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/scenarios', {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                alert(data.message);
+                loadScenarios();
+            } catch (error) {
+                console.error('Error deleting all scenarios:', error);
+                alert('Error occurred while deleting all scenarios');
+            }
+        }
+
+        async function deleteScenario(scenarioName) {
+            if (!confirm(`Are you sure you want to delete scenario "${scenarioName}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/scenarios/${scenarioName}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                alert(data.message);
+                loadScenarios();
+            } catch (error) {
+                console.error('Error deleting scenario:', error);
+                alert('Error occurred while deleting');
+            }
+        }
+
+        async function deleteReport(reportName) {
+            if (!confirm(`Are you sure you want to delete report "${reportName}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/reports/${reportName}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                alert(data.message);
+                loadReports();
+            } catch (error) {
+                console.error('Error deleting report:', error);
+                alert('Error occurred while deleting');
+            }
+        }
+
+        async function downloadScenario(scenarioName) {
+            try {
+                const response = await fetch(`/scenarios/${scenarioName}`);
+                const data = await response.json();
+                
+                // Létrehozunk egy Blob objektumot a JSON adatból
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = window.URL.createObjectURL(blob);
+                
+                // Létrehozunk egy ideiglenes <a> elemet a letöltéshez
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${scenarioName}.json`;
+                document.body.appendChild(a);
+                a.click();
+                
+                // Takarítás
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                console.error('Error downloading scenario:', error);
+                alert('Error occurred while downloading the scenario');
+            }
+        }
+
+        // Update the loadScenarios function to include edit and delete buttons
+        async function loadScenarios() {
+            try {
+                const response = await fetch('/scenarios');
+                const scenarios = await response.json();
+                const scenariosList = document.getElementById('scenarios-list');
+                scenariosList.innerHTML = '';
+                
+                scenarios.forEach(scenario => {
+                    const card = document.createElement('div');
+                    card.className = 'col-md-6 mb-4';
+                    
+                    // Format dates
+                    const createdAt = scenario.metadata.created_at ? new Date(scenario.metadata.created_at).toLocaleString('en-US') : 'N/A';
+                    const lastRun = scenario.metadata.last_run ? new Date(scenario.metadata.last_run).toLocaleString('en-US') : 'Never run';
+                    
+                    card.innerHTML = `
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">${scenario.name}</h5>
+                                <p class="card-text">${scenario.description}</p>
+                                <div class="scenario-info mb-3">
+                                    <small class="text-muted">
+                                        Created: ${createdAt}<br>
+                                        Last run: ${lastRun}<br>
+                                        Run count: ${scenario.metadata.run_count || 0}
+                                    </small>
+                                </div>
+                                <div class="btn-group">
+                                    <button class="btn btn-success" id="start-${scenario.name}" onclick="startTest('${scenario.name}')">
+                                        Start Test
+                                    </button>
+                                    <button class="btn btn-warning" id="stop-${scenario.name}" onclick="stopTest('${scenario.name}')" style="display: none;">
+                                        Stop
+                                    </button>
+                                    <button class="btn btn-primary" onclick="showScenarioModal('${scenario.name}')">
+                                        Edit
+                                    </button>
+                                    <button class="btn btn-info" onclick="downloadScenario('${scenario.name}')">
+                                        Download
+                                    </button>
+                                    <button class="btn btn-danger" onclick="deleteScenario('${scenario.name}')">
+                                        Delete
+                                    </button>
+                                </div>
+                                <div class="mt-2">
+                                    <span id="status-${scenario.name}" class="badge bg-secondary"></span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    scenariosList.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading scenarios:', error);
+            }
+        }
+
+        async function startTest(scenarioName) {
+            try {
+                const statusSpan = document.getElementById(`status-${scenarioName}`);
+                const startButton = document.getElementById(`start-${scenarioName}`);
+                const stopButton = document.getElementById(`stop-${scenarioName}`);
+                
+                statusSpan.textContent = 'Starting...';
+                statusSpan.className = 'badge bg-warning';
+                
+                startButton.style.display = 'none';
+                stopButton.style.display = 'inline-block';
+                
+                const response = await fetch(`/tests/start/${scenarioName}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                // Show the stop all tests button
+                document.getElementById('stopAllTestsBtn').style.display = 'block';
+                
+                // Start checking status
+                checkStatus(scenarioName);
+                
+            } catch (error) {
+                console.error('Error starting test:', error);
+                const statusSpan = document.getElementById(`status-${scenarioName}`);
+                const startButton = document.getElementById(`start-${scenarioName}`);
+                const stopButton = document.getElementById(`stop-${scenarioName}`);
+                
+                statusSpan.textContent = 'Error occurred';
+                statusSpan.className = 'badge bg-danger';
+                
+                startButton.style.display = 'inline-block';
+                stopButton.style.display = 'none';
+            }
+        }
+
+        // Helper function to check if any tests are running and update the stop all button
+        async function updateStopAllButton() {
+            try {
+                // Check all status badges to see if any test is running
+                const runningTests = document.querySelectorAll('.badge.bg-primary');
+                const stopAllBtn = document.getElementById('stopAllTestsBtn');
+                
+                if (runningTests.length > 0) {
+                    stopAllBtn.style.display = 'block';
+                } else {
+                    stopAllBtn.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error updating stop all button:', error);
+            }
+        }
+
+        async function stopTest(scenarioName) {
+            try {
+                // Töröljük az állapot ellenőrző időzítőt, ha létezik
+                if (statusCheckers[scenarioName]) {
+                    clearTimeout(statusCheckers[scenarioName]);
+                    delete statusCheckers[scenarioName];
+                    console.log(`Status checker stopped for ${scenarioName}`);
+                }
+                
+                const response = await fetch(`/tests/stop/${scenarioName}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById(`start-${scenarioName}`).style.display = 'inline-block';
+                    document.getElementById(`stop-${scenarioName}`).style.display = 'none';
+                    document.getElementById(`status-${scenarioName}`).textContent = 'Stopped';
+                    document.getElementById(`status-${scenarioName}`).className = 'badge bg-warning';
+                    
+                    // Frissítsük az összes futó folyamat leállító gomb láthatóságát
+                    await updateStopAllButton();
+                    
+                    // Frissítsük a jelentéseket és forgatókönyveket
+                    loadReports();
+                    loadScenarios();
+                } else {
+                    alert(data.detail || 'Error occurred while stopping the test');
+                }
+            } catch (error) {
+                console.error('Error stopping test:', error);
+                alert('Error occurred while stopping the test');
+            }
+        }
+
+        async function checkStatus(scenarioName) {
+            const statusSpan = document.getElementById(`status-${scenarioName}`);
+            const startButton = document.getElementById(`start-${scenarioName}`);
+            const stopButton = document.getElementById(`stop-${scenarioName}`);
+            
+            try {
+                const statusResponse = await fetch(`/tests/status/${scenarioName}`);
+                const statusData = await statusResponse.json();
+                
+                if (statusData.status === 'completed') {
+                    statusSpan.textContent = 'Completed';
+                    statusSpan.className = 'badge bg-success';
+                    startButton.style.display = 'inline-block';
+                    stopButton.style.display = 'none';
+                    
+                    // Check if there are any running tests left
+                    await updateStopAllButton();
+                    
+                    loadReports(); // Refresh reports list
+                    loadScenarios(); // Refresh scenarios to update metadata
+                } else if (statusData.status === 'running') {
+                    statusSpan.textContent = 'Running...';
+                    statusSpan.className = 'badge bg-primary';
+                    startButton.style.display = 'none';
+                    stopButton.style.display = 'inline-block';
+                    
+                    // Show the stop all button when at least one test is running
+                    document.getElementById('stopAllTestsBtn').style.display = 'block';
+                    
+                    // Időzítő tárolása a statusCheckers objektumban, hogy később leállítható legyen
+                    statusCheckers[scenarioName] = setTimeout(() => checkStatus(scenarioName), timeoutSettings.statusRefreshInterval);
+                } else if (statusData.status === 'stopped') {
+                    statusSpan.textContent = 'Stopped';
+                    statusSpan.className = 'badge bg-secondary';
+                    startButton.style.display = 'inline-block';
+                    stopButton.style.display = 'none';
+                    
+                    // Check if there are any running tests left
+                    await updateStopAllButton();
+                    
+                    loadReports();
+                    loadScenarios();
+                } else {
+                    statusSpan.textContent = 'Not found';
+                    statusSpan.className = 'badge bg-secondary';
+                    startButton.style.display = 'inline-block';
+                    stopButton.style.display = 'none';
+                    
+                    // Check if there are any running tests left
+                    await updateStopAllButton();
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+                statusSpan.textContent = 'Error occurred';
+                statusSpan.className = 'badge bg-danger';
+                startButton.style.display = 'inline-block';
+                stopButton.style.display = 'none';
+                
+                // Check if there are any running tests left
+                await updateStopAllButton();
+            }
+        }
+
+        async function stopAllTests() {
+            try {
+                const response = await fetch('/scenarios/stop', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                alert(data.message);
+                
+                // Update UI: show all start buttons, hide all stop buttons
+                document.querySelectorAll('[id^="start-"]').forEach(btn => {
+                    btn.style.display = 'inline-block';
+                });
+                document.querySelectorAll('[id^="stop-"]').forEach(btn => {
+                    btn.style.display = 'none';
+                });
+                
+                // Update all status badges
+                document.querySelectorAll('[id^="status-"]').forEach(span => {
+                    span.textContent = 'Stopped';
+                    span.className = 'badge bg-warning';
+                });
+                
+                // Hide the stop all tests button
+                document.getElementById('stopAllTestsBtn').style.display = 'none';
+                
+                // Refresh data
+                loadReports();
+                loadScenarios();
+            } catch (error) {
+                console.error('Error stopping all tests:', error);
+                alert('Error occurred while stopping the tests');
+            }
+        }
+
+        function showUploadModal() {
+            document.getElementById('uploadForm').reset();
+            uploadModal.show();
+        }
+
+        async function uploadScenario() {
+            const formData = new FormData();
+            const fileInput = document.getElementById('scenarioFile');
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/scenarios/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                alert(data.message);
+                uploadModal.hide();
+                loadScenarios(); // Refresh scenarios list
+            } catch (error) {
+                alert('Error occurred during upload: ' + error);
+            }
+        }
+
+        async function loadRecipientList() {
+            const input = document.getElementById('recipient_list');
+            if (!input.files || !input.files[0]) return;
+            
+            const file = input.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const content = e.target.result;
+                // Split by newline or comma and clean up entries
+                const emails = content.split(/[\n,]/)
+                    .map(email => email.trim())
+                    .filter(email => email && email.includes('@')); // Basic email validation
+                
+                const toEmailField = document.getElementById('to_email');
+                // Append new emails to existing ones
+                const existingEmails = toEmailField.value.split(/[\n,]/)
+                    .map(email => email.trim())
+                    .filter(email => email);
+                
+                // Combine and remove duplicates
+                const uniqueEmails = [...new Set([...existingEmails, ...emails])];
+                
+                toEmailField.value = uniqueEmails.join('\n');
+                alert(`${emails.length} email addresses loaded (${uniqueEmails.length} unique addresses)`);
+                input.value = ''; // Reset input
+            };
+            
+            reader.readAsText(file);
+        }
+
+        async function deleteAllReports() {
+            if (!confirm('Are you sure you want to delete all reports? This action cannot be undone!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/reports', {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                alert(data.message);
+                loadReports(); // Refresh the report list
+            } catch (error) {
+                console.error('Error deleting all reports:', error);
+                alert('Error occurred while deleting all reports');
+            }
+        }
+
+        async function loadReports() {
+            try {
+                const response = await fetch('/reports');
+                const reports = await response.json();
+                const reportsList = document.getElementById('reports-list');
+                reportsList.innerHTML = '';
+                
+                reports.forEach(report => {
+                    const card = document.createElement('div');
+                    card.className = 'col-md-6 mb-4';
+                    
+                    const created = new Date(report.created * 1000).toLocaleString('en-US');
+                    const successRate = report.success_rate !== null ? `${report.success_rate.toFixed(1)}%` : 'N/A';
+                    
+                    card.innerHTML = `
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">${report.name}</h5>
+                                <p class="card-text">
+                                    Created: ${created}<br>
+                                    Success rate: ${successRate}
+                                </p>
+                                <div class="btn-group">
+                                    <a href="${report.html_url}" target="_blank" class="btn btn-primary">HTML Report</a>
+                                    <a href="${report.json_url}" target="_blank" class="btn btn-info">JSON Download</a>
+                                    <button class="btn btn-danger" onclick="deleteReport('${report.filename}')">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    reportsList.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading reports:', error);
+            }
+        }
+        
+        // Logs kezelése
+        async function loadLogs() {
+            try {
+                const response = await fetch('/logs');
+                const logs = await response.json();
+                const logsList = document.getElementById('logs-list');
+                logsList.innerHTML = '';
+                
+                logs.forEach(log => {
+                    const card = document.createElement('div');
+                    card.className = 'col-md-6 mb-4';
+                    
+                    const created = new Date(log.created * 1000).toLocaleString('en-US');
+                    const sizeKB = (log.size / 1024).toFixed(2);
+                    
+                    card.innerHTML = `
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">${log.name}</h5>
+                                <p class="card-text">
+                                    Created: ${created}<br>
+                                    Size: ${sizeKB} KB
+                                </p>
+                                <div class="btn-group">
+                                    <button class="btn btn-primary" onclick="viewLog('${log.filename}')">View</button>
+                                    <a href="/logs/${log.filename}" target="_blank" class="btn btn-info">Download</a>
+                                    <button class="btn btn-danger" onclick="deleteLog('${log.filename}')">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    logsList.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading logs:', error);
+            }
+        }
+        
+        // Functions related to timeout settings
+        function showTimeoutModal() {
+            // Load current timeout settings into form fields
+            document.getElementById('smtpConnectTimeout').value = timeoutSettings.smtpConnectTimeout;
+            document.getElementById('smtpSendTimeout').value = timeoutSettings.smtpSendTimeout;
+            document.getElementById('statusRefreshInterval').value = timeoutSettings.statusRefreshInterval;
+            
+            // Show modal
+            timeoutModal.show();
+        }
+        
+        function saveTimeoutSettings() {
+            // Read settings from form fields
+            timeoutSettings.smtpConnectTimeout = parseFloat(document.getElementById('smtpConnectTimeout').value);
+            timeoutSettings.smtpSendTimeout = parseFloat(document.getElementById('smtpSendTimeout').value);
+            timeoutSettings.statusRefreshInterval = parseInt(document.getElementById('statusRefreshInterval').value);
+            
+            // Save settings to localStorage
+            localStorage.setItem('timeoutSettings', JSON.stringify(timeoutSettings));
+            
+            // Send settings to the server
+            fetch('/settings/timeout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    connect_timeout: timeoutSettings.smtpConnectTimeout,
+                    send_timeout: timeoutSettings.smtpSendTimeout
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Timeout settings updated on server:', data);
+                // Close modal
+                timeoutModal.hide();
+                
+                // User feedback
+                alert('Timeout settings successfully saved. Changes will take effect in subsequent operations.');
+            })
+            .catch(error => {
+                console.error('Error occurred while saving settings:', error);
+                alert('Error occurred while saving timeout settings. Please try again.');
+            });
+        }
+        
+        function loadTimeoutSettings() {
+            // Load settings from localStorage if it exists
+            const savedSettings = localStorage.getItem('timeoutSettings');
+            if (savedSettings) {
+                try {
+                    const parsedSettings = JSON.parse(savedSettings);
+                    timeoutSettings = { ...timeoutSettings, ...parsedSettings };
+                    console.log('Timeout settings loaded:', timeoutSettings);
+                } catch (error) {
+                    console.error('Error loading timeout settings:', error);
+                }
+            }
+        }
+        
+        let currentLogFilename = '';
+        
+        async function viewLog(filename) {
+            try {
+                const response = await fetch(`/logs/${filename}`);
+                const data = await response.json();
+                
+                document.getElementById('logViewModalTitle').textContent = `Log: ${filename}`;
+                document.getElementById('logContent').textContent = data.content;
+                currentLogFilename = filename;
+                
+                const logViewModal = new bootstrap.Modal(document.getElementById('logViewModal'));
+                logViewModal.show();
+            } catch (error) {
+                console.error('Error loading log content:', error);
+                alert('Error occurred while loading the log');
+            }
+        }
+        
+        async function deleteLog(filename) {
+            if (!confirm(`Are you sure you want to delete the "${filename}" log file?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/logs/${filename}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                alert(data.message);
+                loadLogs(); // Refresh the logs list
+            } catch (error) {
+                console.error('Error deleting log:', error);
+                alert('Error occurred while deleting the log');
+            }
+        }
+        
+        async function deleteAllLogs() {
+            if (!confirm('Are you sure you want to delete all log files? This action cannot be undone!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/logs', {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                alert(data.message);
+                loadLogs(); // Refresh the logs list
+            } catch (error) {
+                console.error('Error deleting all logs:', error);
+                alert('Error occurred while deleting all logs');
+            }
+        }
+
+        // Initial load
+        loadScenarios();
+        loadReports();
+        loadLogs();
+
+        // Setup event listeners
+        document.getElementById('deleteCurrentLogBtn').addEventListener('click', function() {
+            if (currentLogFilename) {
+                const logViewModal = bootstrap.Modal.getInstance(document.getElementById('logViewModal'));
+                logViewModal.hide();
+                deleteLog(currentLogFilename);
+            }
+        });
+        
+        // Auto refresh handler functions
+        function startAutoRefresh() {
+            if (autoRefreshEnabled) {
+                // Stop previous timers if they existed
+                stopAutoRefresh();
+                
+                // Automatic log refresh
+                logsRefreshTimer = setInterval(() => {
+                    loadLogs();
+                }, refreshInterval);
+                
+                // Automatic reports refresh
+                reportsRefreshTimer = setInterval(() => {
+                    loadReports();
+                }, refreshInterval);
+                
+                console.log(`Auto refresh started (${refreshInterval}ms)`);
+            }
+        }
+        
+        function stopAutoRefresh() {
+            // Stop logs timer
+            if (logsRefreshTimer) {
+                clearInterval(logsRefreshTimer);
+                logsRefreshTimer = null;
+            }
+            
+            // Stop reports timer
+            if (reportsRefreshTimer) {
+                clearInterval(reportsRefreshTimer);
+                reportsRefreshTimer = null;
+            }
+            
+            console.log('Auto refresh stopped');
+        }
+        
+        function toggleAutoRefresh() {
+            autoRefreshEnabled = !autoRefreshEnabled;
+            
+            if (autoRefreshEnabled) {
+                startAutoRefresh();
+                document.getElementById('toggleRefreshBtn').textContent = 'Disable Auto Refresh';
+                document.getElementById('toggleRefreshBtn').classList.replace('btn-success', 'btn-warning');
+            } else {
+                stopAutoRefresh();
+                document.getElementById('toggleRefreshBtn').textContent = 'Enable Auto Refresh';
+                document.getElementById('toggleRefreshBtn').classList.replace('btn-warning', 'btn-success');
+            }
+        }
+        
+        function showAboutModal() {
+            aboutModal.show();
+        }
+    </script>
+    
+    <!-- About Modal -->
+    <div class="modal fade" id="aboutModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">About SMTP Stress Test Tool</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>This application is a tool designed for load testing SMTP servers, allowing you to simulate sending large volumes of emails and measure server performance.</p>
+                    
+                    <h6>Key Features:</h6>
+                    <ul>
+                        <li>Test scenario management: create, edit, upload, download, and delete</li>
+                        <li>Running SMTP tests: simultaneous (parallel) email sending on multiple threads</li>
+                        <li>Test monitoring with real-time status updates</li>
+                        <li>Detailed HTML and JSON reports</li>
+                        <li>Log file management</li>
+                        <li>Global test control</li>
+                        <li>Customizable timeout settings</li>
+                    </ul>
+                    
+                    <hr>
+                    
+                    <div class="text-center mt-4">
+                        <p>If you find this tool useful, consider supporting its development:</p>
+                        <a href="https://ko-fi.com/X8X01DODMO" target="_blank">
+                            <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Buy Me a Coffee at ko-fi.com">
+                        </a>
+                        
+                        <div class="mt-3">
+                            <p>Or scan this QR code:</p>
+                            <img src="/static/ko-fi-qrcode.png" alt="Ko-fi QR Code" class="img-fluid" style="max-width: 200px;">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
